@@ -16,6 +16,9 @@ c = [ 1  2  5]
 
 tsp_model = Model(with_optimizer(Cbc.Optimizer))
 
+# para definir o tempo limite em segundos.
+# set_time_limit_sec(tsp_model , <tempo>)
+
 """
 Decision variable - binary nxn Matrix representing the edges taken between nodes
 """
