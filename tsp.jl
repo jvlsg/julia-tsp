@@ -1,4 +1,4 @@
-using JuMP, Cbc, DelimitedFiles
+using JuMP, Cbc, DelimitedFiles, Plots
 
 function distances_from_coords(node_coords::Array{Float32,2})
     """
@@ -22,6 +22,19 @@ function distances_from_coords(node_coords::Array{Float32,2})
     return node_distances
 end
 
+function plot_result(uV::Array{Float64,1} , node_coords::Array{Float32,2})
+	node_number = size(node_coords,1)
+	x = zeros(node_number,1)
+	y = zeros(node_number,1)
+	for elements in range(1,length=node_number)
+		x[Int(round(uV[elements]+1))] = node_coords[elements , 1];
+		y[Int(round(uV[elements]+1))] = node_coords[elements , 2];
+	end
+	gr()
+	plot(x,y, label="line")
+	png("/tmp/aspng")
+end
+
 function tsp_main(args)
     """
     Use Cbc to calculate Travelling Salesperson solution for a given graph.
@@ -40,29 +53,47 @@ function tsp_main(args)
 
     node_number = size(node_distances)[1]
 
-    tsp_model = Model(with_optimizer(Cbc.Optimizer))
+    tsp_model = Model(with_optimizer(Cbc.Optimizer , threads=4))
 
     #Limits execution time
-    set_time_limit_sec(tsp_model , 1)
+    #set_time_limit_sec(tsp_model , 1)
 
     #Decision variable - binary nxn Matrix representing the edges taken between nodes
     @variable(tsp_model, edges_taken[1:node_number, 1:node_number], Bin)
-    @variable(tsp_model, u[1:node_number], integer=true)
+	@variable(tsp_model,  0 <= u[1:node_number]  <= (node_number-1),Int)
 
     #Min Sum ( node_distances[i][j] * edges_taken[i][j] for all nodes)
     @objective(tsp_model,Min, sum( map(*,node_distances,edges_taken) ) )
 
-    fix(u[1], 0) # change the 1 for the position of initial node
+    fix(u[1], 0,force=true) # change the 1 for the position of initial node
 
     @constraints tsp_model begin
         [i= 1:node_number] , sum(edges_taken[i,1:end .!=i]) == 1
         [i= 1:node_number] , sum(edges_taken[1:end.!=i,i]) == 1
-        [i = 1:node_number , j= 2:node_number , i != j] , u[j] >= u[i] + edges_taken[i,j] - node_number *(1-edges_taken[i,j])
+        [i = 1:node_number , j= 2:node_number , i != j] , u[j] >= u[i] + 1 * edges_taken[i,j] - node_number *(1-edges_taken[i,j])
     end
 
     #print(tsp_model)
     optimize!(tsp_model)
-    print(edges_taken)
+	print("resposta: ")
+	println(objective_value(tsp_model))
+	println("valor de u: ")
+	println(value.(u))
+	println("valor de u ordenado:")
+	println(sort(value.(u)))
+	#xV = value.(edges_taken)
+	#a = 0.0
+	#for i in range(1, length=node_number)
+	#	for j in range(1 , length=node_number)
+	#		if xV[i , j] == 1
+	#			global a = a + node_distances[i , j]
+	#		end
+	#	end
+	#end
+    #print(edges_taken)
+	vetU = value.(u)
+	println(sort(vetU))
+	#plot_result(vetU , node_coords)
 end
 
 tsp_main(ARGS)
