@@ -40,29 +40,54 @@ function tsp_main(args)
 
     node_number = size(node_distances)[1]
 
-    tsp_model = Model(with_optimizer(Cbc.Optimizer))
+    tsp_model = Model(with_optimizer(Cbc.Optimizer , threads=4))
 
     #Limits execution time
-    set_time_limit_sec(tsp_model , 1)
+    set_time_limit_sec(tsp_model , 7200)
 
     #Decision variable - binary nxn Matrix representing the edges taken between nodes
     @variable(tsp_model, edges_taken[1:node_number, 1:node_number], Bin)
-    @variable(tsp_model, u[1:node_number], integer=true)
+	@variable(tsp_model,  0 <= u[1:node_number]  <= (node_number-1),Int)
 
     #Min Sum ( node_distances[i][j] * edges_taken[i][j] for all nodes)
     @objective(tsp_model,Min, sum( map(*,node_distances,edges_taken) ) )
 
-    fix(u[1], 0) # change the 1 for the position of initial node
+    fix(u[1], 0,force=true) # change the 1 for the position of initial node
 
-    @constraints tsp_model begin
-        [i= 1:node_number] , sum(edges_taken[i,1:end .!=i]) == 1
-        [i= 1:node_number] , sum(edges_taken[1:end.!=i,i]) == 1
-        [i = 1:node_number , j= 2:node_number , i != j] , u[j] >= u[i] + edges_taken[i,j] - node_number *(1-edges_taken[i,j])
-    end
+	for i in 1:node_number
+		@constraint(tsp_model,sum(edges_taken[i,j] for j in 1:node_number if i != j ) == 1)
+	end
+	# Restrições para garantir a chegada em cada vértice
+	for j in 1:node_number
+		@constraint(tsp_model,sum(edges_taken[i,j] for i in 1:node_number if i != j) == 1)
+	end
+	for i in 1:node_number
+		for j in 2:node_number
+			if i != j
+				@constraint(tsp_model,u[i] - u[j] + node_number * edges_taken[i,j] <= node_number - 1)
+			end
+		end
+	end
+	for i in 2:node_number
+		@constraint(tsp_model, 0 <= u[i] <= node_number - 1)
+	end
 
-    #print(tsp_model)
     optimize!(tsp_model)
-    print(edges_taken)
+
+	#Código para facilitar a impressão das cidades percorridas
+	auxU = value.(u)
+	ordem = zeros(UInt64 , (node_number,1))
+	for i in 1:node_number
+		ordem[Int64(round(auxU[i]+1))] = i
+	end
+
+	print("O valor do caminho otimo é: ")
+	println(objective_value(tsp_model))
+	print("A ordem dos pontos percorridos: ")
+	for i in 1:node_number
+		print(ordem[i])
+		print(" ")
+	end
 end
 
 tsp_main(ARGS)
